@@ -108,6 +108,29 @@ void UART1_Init(void)
                              // NVIC_SetPriority(USART1_IRQn,2);
 }
 
+void SYSCFG_Init()
+
+{
+    RCC->APB2ENR |= (1 << 14);        // RCC_APB2ENR_SYSCFGEN;
+    SYSCFG->EXTICR[0] &= ~(0xF << 0); // SYSCFG->EXTICR[0] = SYSCFG_EXTICR1
+
+    EXTI->IMR |= (1 << 0);
+
+    EXTI->RTSR &= ~(1 << 0);
+    EXTI->FTSR |= (1 << 0);
+
+    NVIC->ISER[0] = (1 << 6);
+    NVIC->IP[6] = (3 << 4);
+}
+void UserButton_Init()
+{
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    GPIOA->MODER &= ~(3 << (0 * 2));
+
+    GPIOA->PUPDR &= ~(3 << (0 * 2));
+    GPIOA->PUPDR |= (1 << (0 * 2));
+}
 void uart_register_rx_cb(uart_rx_cb_t cb)
 {
     g_uart_rx_cb = cb;
@@ -125,6 +148,21 @@ void USART1_IRQHandler(void)
     }
 }
 
+void EXTI0_IRQHandler(void)
+{
+    if (EXTI->PR & (1 << 0))
+    {
+        EXTI->PR = (1 << 0);
+
+        static uint32_t last_press_time = 0;
+        if (g_ticks - last_press_time > 200)
+        {
+            last_press_time = g_ticks;
+
+            event_queue_post(EV_BUTTON);
+        }
+    }
+}
 // ham call back thuc te
 void App_UART_RX_cb(uint8_t byte)
 {
@@ -227,7 +265,8 @@ int main(void)
 
     LED_Init();
     UART1_Init();
-
+    UserButton_Init();
+    SYSCFG_Init();
     uart_register_rx_cb(App_UART_RX_cb);
 
     UART1_SendString("\r\n=== FSM LED DEMO READY ===\r\n");
